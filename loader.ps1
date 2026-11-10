@@ -4,6 +4,7 @@
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+try {
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigDir = Join-Path $env:APPDATA "AnnoTuneLoader"
@@ -261,3 +262,12 @@ $stopButton.Add_Click({
 
 $form.Add_FormClosing({ Stop-Model })
 [void]$form.ShowDialog()
+} catch {
+    $text = $_.Exception.Message
+    try {
+        [System.Windows.Forms.MessageBox]::Show($text, "AnnoTune Loader") | Out-Null
+    } catch {
+        Write-Error $text
+    }
+    exit 1
+}

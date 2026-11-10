@@ -15,7 +15,7 @@ The first Run downloads [llama.cpp b12180](https://github.com/ggml-org/llama.cpp
 
 ## Start
 
-Windows: double-click `AnnoTuneLoader.vbs`.
+Windows: download [AnnoTuneLoader.exe](https://github.com/leelieber2025/AnnoTuneLoader/raw/main/AnnoTuneLoader.exe) and double-click it. That is the only file you need.
 
 Mac: double-click `AnnoTuneLoader.command`. The first time, use Control-click and choose Open.
 
