@@ -1,5 +1,6 @@
 #!/bin/bash
 # Double-click this file on macOS. The first Run downloads llama.cpp b12180.
+# Choose one GGUF. No LoRA is loaded.
 # Nothing else is installed.
 set -u
 cd "$(dirname "$0")"
@@ -85,39 +86,27 @@ if health_ok; then
     exit 0
 fi
 
-BASE=""
-NAME=""
-ML=""
+MODEL=""
 if [[ -f "$PATHS" ]]; then
-    BASE="$(sed -n '1p' "$PATHS")"
-    NAME="$(sed -n '2p' "$PATHS")"
-    ML="$(sed -n '3p' "$PATHS")"
+    MODEL="$(sed -n '1p' "$PATHS")"
 fi
 
-if [[ -f "$BASE" && -f "$NAME" && -f "$ML" ]]; then
-    CHOICE="$(osascript -e "button returned of (display dialog \"Use the weight files you chose last time?\" buttons {\"Choose again\", \"Start\"} default button \"Start\" with title \"AnnoTune Loader\")" 2>/dev/null || true)"
+if [[ -f "$MODEL" ]]; then
+    CHOICE="$(osascript -e "button returned of (display dialog \"Use the model file you chose last time?\" buttons {\"Choose again\", \"Start\"} default button \"Start\" with title \"AnnoTune Loader\")" 2>/dev/null || true)"
     if [[ "$CHOICE" != "Start" ]]; then
-        BASE=""
-        NAME=""
-        ML=""
+        MODEL=""
     fi
 else
-    BASE=""
-    NAME=""
-    ML=""
+    MODEL=""
 fi
 
-if [[ -z "$BASE" ]]; then
-    BASE="$(choose_file "Base model (.gguf)")"
-    NAME="$(choose_file "Name adapter (.gguf)")"
-    ML="$(choose_file "ML adapter (.gguf)")"
+if [[ -z "$MODEL" ]]; then
+    MODEL="$(choose_file "Model (.gguf)")"
 fi
-BASE="${BASE%$'\r'}"
-NAME="${NAME%$'\r'}"
-ML="${ML%$'\r'}"
+MODEL="${MODEL%$'\r'}"
 
-if [[ ! -f "$BASE" || ! -f "$NAME" || ! -f "$ML" ]]; then
-    dialog "Choose the base model, the name adapter, and the ML adapter."
+if [[ ! -f "$MODEL" ]]; then
+    dialog "Choose the model file."
     exit 1
 fi
 
@@ -127,16 +116,14 @@ if ! ensure_server; then
 fi
 BIN="$(find_server)"
 
-printf '%s\n%s\n%s\n' "$BASE" "$NAME" "$ML" >"$PATHS"
+printf '%s\n' "$MODEL" >"$PATHS"
 : >"$LOG"
 : >"$ERR"
 BINDIR="$(dirname "$BIN")"
 export DYLD_LIBRARY_PATH="${BINDIR}:${CACHE}${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 nohup "$BIN" \
-    -m "$BASE" \
-    --lora "${NAME},${ML}" \
-    --lora-init-without-apply \
-    -c 8192 \
+    -m "$MODEL" \
+    -c 2048 \
     -ngl 99 \
     -np 1 \
     --no-cont-batching \

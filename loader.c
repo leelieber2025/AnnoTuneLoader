@@ -1,4 +1,4 @@
-/* AnnoTune Loader. One window, three weight files, then Run.
+/* AnnoTune Loader. One window, one weight file, then Run.
    The first Run downloads llama.cpp b12180 for this computer. */
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
@@ -9,16 +9,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define IDC_BASE 101
-#define IDC_NAME 102
-#define IDC_ML 103
+#define IDC_MODEL 101
 #define IDC_RUN 104
 #define IDC_STOP 105
 #define IDC_STATUS 106
 
 static const wchar_t RELEASE[] =
     L"https://github.com/ggml-org/llama.cpp/releases/download/b12180/";
-static HWND g_wnd, g_base, g_name, g_ml, g_status, g_run;
+static HWND g_wnd, g_model, g_status, g_run;
 static HANDLE g_proc;
 static DWORD g_pid;
 static int g_owned, g_wait;
@@ -72,7 +70,6 @@ static void load_paths(void) {
     DWORD n = 0;
     wchar_t wide[8192];
     wchar_t *line, *next;
-    int row = 0;
     _snwprintf(file, MAX_PATH, L"%s\\paths.txt", g_config);
     h = CreateFileW(file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (h == INVALID_HANDLE_VALUE) return;
@@ -81,27 +78,23 @@ static void load_paths(void) {
     raw[n] = 0;
     if (!MultiByteToWideChar(CP_UTF8, 0, raw, -1, wide, 8192)) return;
     line = wide;
-    while (line && row < 3) {
+    if (line) {
         next = wcschr(line, L'\n');
-        if (next) *next++ = 0;
+        if (next) *next = 0;
         while (*line == L'\r' || *line == L' ') line++;
         if (wcslen(line) && line[wcslen(line) - 1] == L'\r') line[wcslen(line) - 1] = 0;
-        SetWindowTextW(row == 0 ? g_base : row == 1 ? g_name : g_ml, line);
-        line = next;
-        row++;
+        SetWindowTextW(g_model, line);
     }
 }
 
 static void save_paths(void) {
-    wchar_t file[MAX_PATH], a[2048], b[2048], c[2048], all[7000];
-    char utf[16000];
+    wchar_t file[MAX_PATH], a[2048], all[2200];
+    char utf[8000];
     HANDLE h;
     DWORD n;
     int bytes;
-    GetWindowTextW(g_base, a, 2048);
-    GetWindowTextW(g_name, b, 2048);
-    GetWindowTextW(g_ml, c, 2048);
-    _snwprintf(all, 7000, L"%s\n%s\n%s\n", a, b, c);
+    GetWindowTextW(g_model, a, 2048);
+    _snwprintf(all, 2200, L"%s\n", a);
     bytes = WideCharToMultiByte(CP_UTF8, 0, all, -1, utf, sizeof(utf), NULL, NULL);
     if (bytes <= 1) return;
     _snwprintf(file, MAX_PATH, L"%s\\paths.txt", g_config);
@@ -330,13 +323,13 @@ static int text_of(HWND edit, wchar_t *buf, int n) {
 }
 
 static void start_server(void) {
-    wchar_t base[2048], name[2048], ml[2048], binary[MAX_PATH], cmd[8192];
+    wchar_t model[2048], binary[MAX_PATH], cmd[8192];
     wchar_t logf[MAX_PATH], errf[MAX_PATH], nul[MAX_PATH], path_env[32768], extra[8192];
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
     HANDLE log, err, in;
-    if (!text_of(g_base, base, 2048) || !text_of(g_name, name, 2048) || !text_of(g_ml, ml, 2048)) {
-        set_status(L"Choose the base model, the name adapter, and the ML adapter.");
+    if (!text_of(g_model, model, 2048)) {
+        set_status(L"Choose the model file.");
         return;
     }
     if (health_ok()) {
@@ -387,16 +380,9 @@ static void start_server(void) {
     cmd[0] = 0;
     quote_arg(cmd, 8192, binary);
     quote_arg(cmd, 8192, L"-m");
-    quote_arg(cmd, 8192, base);
-    quote_arg(cmd, 8192, L"--lora");
-    {
-        wchar_t lora[4200];
-        _snwprintf(lora, 4200, L"%s,%s", name, ml);
-        quote_arg(cmd, 8192, lora);
-    }
-    quote_arg(cmd, 8192, L"--lora-init-without-apply");
+    quote_arg(cmd, 8192, model);
     quote_arg(cmd, 8192, L"-c");
-    quote_arg(cmd, 8192, L"8192");
+    quote_arg(cmd, 8192, L"2048");
     quote_arg(cmd, 8192, L"-ngl");
     quote_arg(cmd, 8192, L"99");
     quote_arg(cmd, 8192, L"-np");
@@ -461,9 +447,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
     switch (msg) {
     case WM_COMMAND:
         switch (LOWORD(wparam)) {
-        case 201: browse(g_base, L"Base model"); break;
-        case 202: browse(g_name, L"Name adapter"); break;
-        case 203: browse(g_ml, L"ML adapter"); break;
+        case 201: browse(g_model, L"Model"); break;
         case IDC_RUN: start_server(); break;
         case IDC_STOP:
             stop_owned();
@@ -515,19 +499,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
     RegisterClassW(&wc);
     g_wnd = CreateWindowExW(0, L"AnnoTuneLoader", L"AnnoTune Loader",
                             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-                            CW_USEDEFAULT, CW_USEDEFAULT, 560, 250, NULL, NULL, inst, NULL);
-    add_label(L"Base model", 16, 18, 100);
-    add_label(L"Name adapter", 16, 56, 100);
-    add_label(L"ML adapter", 16, 94, 100);
-    g_base = add_edit(IDC_BASE, 120, 16, 310);
-    g_name = add_edit(IDC_NAME, 120, 54, 310);
-    g_ml = add_edit(IDC_ML, 120, 92, 310);
+                            CW_USEDEFAULT, CW_USEDEFAULT, 560, 170, NULL, NULL, inst, NULL);
+    add_label(L"Model", 16, 18, 100);
+    g_model = add_edit(IDC_MODEL, 120, 16, 310);
     add_button(L"Browse", 201, 440, 14, 84);
-    add_button(L"Browse", 202, 440, 52, 84);
-    add_button(L"Browse", 203, 440, 90, 84);
-    g_run = add_button(L"Run", IDC_RUN, 120, 134, 90);
-    add_button(L"Stop", IDC_STOP, 220, 134, 90);
-    g_status = add_label(L"Choose the three weight files, then Run.", 16, 176, 510);
+    g_run = add_button(L"Run", IDC_RUN, 120, 56, 90);
+    add_button(L"Stop", IDC_STOP, 220, 56, 90);
+    g_status = add_label(L"Choose the model file, then Run.", 16, 98, 510);
     load_paths();
     ShowWindow(g_wnd, SW_SHOW);
     UpdateWindow(g_wnd);

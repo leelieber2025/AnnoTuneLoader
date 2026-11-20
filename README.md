@@ -19,7 +19,7 @@ Windows: download [AnnoTuneLoader.exe](https://github.com/leelieber2025/AnnoTune
 
 Mac: double-click `AnnoTuneLoader.command`. The first time, use Control-click and choose Open.
 
-Choose the base GGUF, the name adapter, and the ML adapter. Confirm. The same three files are offered the next time. The GPU is used when the downloaded build has one.
+Choose `Qwen3.5-4B-annotune-v9k-name.Q6_K.gguf`. Confirm. The same file is offered the next time. The GPU is used when the downloaded build has one.
 
 Leave the loader open while you annotate. Stop closes the server this loader started. A server that is already running on port 8080 is left as it is.
 

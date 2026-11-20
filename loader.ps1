@@ -1,4 +1,4 @@
-# One window. Three weight files. The first Run downloads llama.cpp b12180.
+# One window. One weight file. The first Run downloads llama.cpp b12180.
 # Requires nothing beyond Windows itself.
 
 $ErrorActionPreference = "Stop"
@@ -92,25 +92,24 @@ function Install-Server {
 }
 
 function Read-Saved {
-    if (-not (Test-Path -LiteralPath $PathsFile)) { return @("", "", "") }
+    if (-not (Test-Path -LiteralPath $PathsFile)) { return "" }
     try {
         $saved = Get-Content -LiteralPath $PathsFile -Raw | ConvertFrom-Json
-        return @([string]$saved.base, [string]$saved.name, [string]$saved.ml)
+        if ($saved.model) { return [string]$saved.model }
+        return ""
     } catch {
-        return @("", "", "")
+        return ""
     }
 }
 
-function Save-Paths([string]$Base, [string]$Name, [string]$Ml) {
+function Save-Paths([string]$Model) {
     New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
-    @{ base = $Base; name = $Name; ml = $Ml } | ConvertTo-Json | Set-Content -LiteralPath $PathsFile -Encoding ASCII
+    @{ model = $Model } | ConvertTo-Json | Set-Content -LiteralPath $PathsFile -Encoding ASCII
 }
 
-function Start-Model([string]$Base, [string]$Name, [string]$Ml) {
-    foreach ($path in @($Base, $Name, $Ml)) {
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            throw "File not found: $path"
-        }
+function Start-Model([string]$Model) {
+    if (-not (Test-Path -LiteralPath $Model -PathType Leaf)) {
+        throw "File not found: $Model"
     }
     if (Test-Health) {
         throw "A model server is already running at $Url. This loader will not start another."
@@ -128,10 +127,8 @@ function Start-Model([string]$Base, [string]$Name, [string]$Ml) {
     $env:PATH = ($extra -join ";") + ";" + $env:PATH
     $script:Proc = Start-Process -FileName $binary -WorkingDirectory $binDir -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput $LogFile -RedirectStandardError $ErrFile -ArgumentList @(
-        "-m", $Base,
-        "--lora", "$Name,$Ml",
-        "--lora-init-without-apply",
-        "-c", "8192",
+        "-m", $Model,
+        "-c", "2048",
         "-ngl", "99",
         "-np", "1",
         "--no-cont-batching",
@@ -169,7 +166,7 @@ $form.Text = "AnnoTune Loader"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
 $form.StartPosition = "CenterScreen"
-$form.ClientSize = New-Object System.Drawing.Size(560, 230)
+$form.ClientSize = New-Object System.Drawing.Size(560, 150)
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 
 function Add-FileRow([string]$Caption, [int]$Top, [string]$Value) {
@@ -197,22 +194,20 @@ function Add-FileRow([string]$Caption, [int]$Top, [string]$Value) {
     return $box
 }
 
-$baseBox = Add-FileRow "Base model" 20 $saved[0]
-$nameBox = Add-FileRow "Name adapter" 58 $saved[1]
-$mlBox = Add-FileRow "ML adapter" 96 $saved[2]
+$modelBox = Add-FileRow "Model" 20 $saved
 
 $run = New-Object System.Windows.Forms.Button
 $run.Text = "Run"
-$run.Location = New-Object System.Drawing.Point(130, 142)
+$run.Location = New-Object System.Drawing.Point(130, 64)
 $run.Size = New-Object System.Drawing.Size(100, 32)
 $stopButton = New-Object System.Windows.Forms.Button
 $stopButton.Text = "Stop"
-$stopButton.Location = New-Object System.Drawing.Point(240, 142)
+$stopButton.Location = New-Object System.Drawing.Point(240, 64)
 $stopButton.Size = New-Object System.Drawing.Size(100, 32)
 $status = New-Object System.Windows.Forms.Label
-$status.Location = New-Object System.Drawing.Point(16, 186)
+$status.Location = New-Object System.Drawing.Point(16, 108)
 $status.Size = New-Object System.Drawing.Size(528, 36)
-$status.Text = "Choose the three weight files, then Run."
+$status.Text = "Choose the model file, then Run."
 $form.Controls.AddRange(@($run, $stopButton, $status))
 
 $timer = New-Object System.Windows.Forms.Timer
@@ -242,8 +237,8 @@ $timer.Add_Tick({
 $run.Add_Click({
     try {
         $run.Enabled = $false
-        Start-Model $baseBox.Text.Trim() $nameBox.Text.Trim() $mlBox.Text.Trim()
-        Save-Paths $baseBox.Text.Trim() $nameBox.Text.Trim() $mlBox.Text.Trim()
+        Start-Model $modelBox.Text.Trim()
+        Save-Paths $modelBox.Text.Trim()
         $script:Waited = 0
         $status.Text = "Loading the model. The GPU build is selected for this computer."
         $timer.Start()
